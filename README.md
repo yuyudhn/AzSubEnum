@@ -44,5 +44,8 @@ python3 azsubenum.py -b retailcorp --thread 10 --permutation permutations.txt --
 
 ![AzSubEnum](https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjJfr0FoT-2mq0Bsyvt2qb7tDp5lOUA8dmcFw_2GArFGOgCywOZEmkYYdpenBQnIOX_r1X6xUdJdFMHFxwDCr18nTtbIwb_gKpPenLj214AiiLCNF_dEa0MUe1PLUJ8sOcnfcWYnySDzJC8XzBeiHCgc3fXgYotSPmARmnzlnQFAxXFMd-sjoOkvEbeQ-X1/s900)
 
+## Let's contribute!
+Do you have any ideas on how to enhance this tool? Let's contribute!
+
 ## Disclaimer
-Any actions and or activities related to the material contained within this tool is solely your responsibility.The misuse of the information in this tool can result in criminal charges brought against the persons in question.
+Any actions and or activities related to the material contained within this tool is solely your responsibility. The misuse of the information in this tool can result in criminal charges brought against the persons in question.

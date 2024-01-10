@@ -1,9 +1,10 @@
 # AzSubEnum - Azure Service Subdomain Enumeration
 AzSubEnum is a specialized subdomain enumeration tool tailored for Azure services. This tool is designed to meticulously search and identify subdomains associated with various Azure services. Through a combination of techniques and queries, AzSubEnum delves into the Azure domain structure, systematically probing and collecting subdomains related to a diverse range of Azure services.
 
+## How it works?
 AzSubEnum operates by leveraging DNS resolution techniques and systematic permutation methods to unveil subdomains associated with Azure services such as Azure App Services, Storage Accounts, Azure Databases (including MSSQL, Cosmos DB, and Redis), Key Vaults, CDN, Email, SharePoint, Azure Container Registry, and more. Its functionality extends to comprehensively scanning different Azure service domains to identify associated subdomains.
 
-With AzSubEnum, users can conduct thorough subdomain enumeration within Azure environments, aiding security professionals, researchers, and administrators in gaining insights into the expansive landscape of Azure services and their corresponding subdomains.
+With this tool, users can conduct thorough subdomain enumeration within Azure environments, aiding security professionals, researchers, and administrators in gaining insights into the expansive landscape of Azure services and their corresponding subdomains.
 
 ## Why i create this?
 During my learning journey on Azure AD exploitation, I discovered that the Azure subdomain tool, [Invoke-EnumerateAzureSubDomains](https://github.com/NetSPI/MicroBurst/blob/master/Misc/Invoke-EnumerateAzureSubDomains.ps1) from NetSPI, was unable to run on my Debian PowerShell. Consequently, I created a crude implementation of that tool in Python.

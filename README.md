@@ -25,8 +25,19 @@ options:
                         File containing permutations
 ```
 
+Basic enumeration:
 ```
 python3 azsubenum.py -b retailcorp --thread 10
+```
+
+Using permutation wordlists:
+```
+python3 azsubenum.py -b retailcorp --thread 10 --permutation permutations.txt
+```
+
+With verbose output:
+```
+python3 azsubenum.py -b retailcorp --thread 10 --permutation permutations.txt --verbose
 ```
 
 ## Screenshot

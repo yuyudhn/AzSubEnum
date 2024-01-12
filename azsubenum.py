@@ -4,113 +4,151 @@ import argparse
 import os
 import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
-# Color definiton
-class color:
+class Color:
     green = '\033[92m'
     red = '\033[91m'
     reset = '\033[0m'
 
-# Signal handler
-def signal_handler(sig, frame):
-    print("Ctrl+C detected. Terminating...")
-    os._exit(0)
+class AzureSubdomainEnumerator:
+    def __init__(self, base, verbose=False, num_threads=1, pf=None):
+        self.base = base
+        self.verbose = verbose
+        self.num_threads = num_threads
+        self.pf = pf
+        self.sub_lookup = {
+            'onmicrosoft.com': 'Microsoft Hosted Domain',
+            'scm.azurewebsites.net': 'App Services - Management',
+            'azurewebsites.net': 'App Services',
+            'p.azurewebsites.net': 'App Services',
+            'cloudapp.net': 'App Services',
+            'file.core.windows.net': 'Storage Accounts - Files',
+            'blob.core.windows.net': 'Storage Accounts - Blobs',
+            'queue.core.windows.net': 'Storage Accounts - Queues',
+            'table.core.windows.net': 'Storage Accounts - Tables',
+            'mail.protection.outlook.com': 'Email',
+            'sharepoint.com': 'SharePoint',
+            'redis.cache.windows.net': 'Databases-Redis',
+            'documents.azure.com': 'Databases-Cosmos DB',
+            'database.windows.net': 'Databases-MSSQL',
+            'vault.azure.net': 'Key Vaults',
+            'azureedge.net': 'CDN',
+            'search.windows.net': 'Search Appliance',
+            'azure-api.net': 'API Services',
+            'azurecr.io': 'Azure Container Registry'
+        }
+        self.results = set()
+        self.results_lock = threading.Lock()
 
-signal.signal(signal.SIGINT, signal_handler)
+    def signal_handler(self, sig, frame):
+        print("Ctrl+C detected. Terminating...")
+        os._exit(0)
 
+    def azuresubs_enum(self, subdomain):
+        try:
+            dns.resolver.resolve(subdomain)
+            return True
+        except dns.resolver.NoAnswer:
+            return True
+        except:
+            pass
 
-def azuresubs_enum(subdomain):
-    try:
-        dns.resolver.resolve(subdomain)
-        return True
-    except dns.resolver.NoAnswer:
-        return True
-    except:
-        pass
+    def generate_permutations(self, base, word, suffix):
+        return [
+            (f"{base}-{word}.{suffix}", f"{word}-{base}.{suffix}"),
+            (f"{word}{base}.{suffix}", f"{base}{word}.{suffix}")
+        ]
 
-def sub_permutations(base, word, suffix, sub_lookup, verbose=False):
-    running_list = []
+    def sub_permutations(self, base, word, suffix):
+        running_list = []
 
-    combinations = [
-        (f"{base}-{word}.{suffix}", f"{word}-{base}.{suffix}"),
-        (f"{word}{base}.{suffix}", f"{base}{word}.{suffix}")
-    ]
+        combinations = self.generate_permutations(base, word, suffix)
 
-    for combination in combinations:
-        for lookup in combination:
-            if azuresubs_enum(lookup):
-                running_list.append((lookup, sub_lookup[suffix]))
-                if verbose:
-                    print(f"{color.green}Subdomain {lookup} found{color.reset}")
-            else:
-                if verbose:
-                    print(f"Subdomain {lookup} not found")
+        for combination in combinations:
+            for lookup in combination:
+                if self.azuresubs_enum(lookup):
+                    running_list.append((lookup, self.sub_lookup[suffix]))
+                    if self.verbose:
+                        print(f"{Color.green}Subdomain {lookup} found{Color.reset}")
+                else:
+                    if self.verbose:
+                        print(f"Subdomain {lookup} not found")
 
-    return running_list
+        return running_list
 
-def do_azsubs_enum(base, verbose=False, num_threads=1, pf=None):
-    sub_lookup = {
-        'onmicrosoft.com': 'Microsoft Hosted Domain',
-        'scm.azurewebsites.net': 'App Services - Management',
-        'azurewebsites.net': 'App Services',
-        'p.azurewebsites.net': 'App Services',
-        'cloudapp.net': 'App Services',
-        'file.core.windows.net': 'Storage Accounts - Files',
-        'blob.core.windows.net': 'Storage Accounts - Blobs',
-        'queue.core.windows.net': 'Storage Accounts - Queues',
-        'table.core.windows.net': 'Storage Accounts - Tables',
-        'mail.protection.outlook.com': 'Email',
-        'sharepoint.com': 'SharePoint',
-        'redis.cache.windows.net': 'Databases-Redis',
-        'documents.azure.com': 'Databases-Cosmos DB',
-        'database.windows.net': 'Databases-MSSQL',
-        'vault.azure.net': 'Key Vaults',
-        'azureedge.net': 'CDN',
-        'search.windows.net': 'Search Appliance',
-        'azure-api.net': 'API Services',
-        'azurecr.io': 'Azure Container Registry'
-    }
+    def sub_pfile(self, word):
+        running_list = []
+        for suffix in self.sub_lookup.keys():
+            with self.results_lock:
+                self.results.update(self.sub_permutations(self.base, word, suffix))
 
-    results = set()
+    def do_azsubs_enum(self):
+        suffixes = self.sub_lookup.keys()
 
-    suffixes = sub_lookup.keys()
+        try:
+            with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
+                future_to_lookup = {}
+                for suffix in suffixes:
+                    lookup = f"{self.base}.{suffix}"
+                    future_to_lookup[executor.submit(self.azuresubs_enum, lookup)] = (lookup, self.sub_lookup[suffix])
 
-    try:
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            future_to_lookup = {}
-            for suffix in suffixes:
-                lookup = f"{base}.{suffix}"
-                future_to_lookup[executor.submit(azuresubs_enum, lookup)] = (lookup, sub_lookup[suffix])
+                for future in as_completed(future_to_lookup):
+                    try:
+                        result = future.result()
+                        subdomain, service = future_to_lookup[future]
+                        with self.results_lock:
+                            if result:
+                                self.results.add((subdomain, service))
+                                if self.verbose:
+                                    print(f"{Color.green}Subdomain {subdomain} found{Color.reset}")
+                            else:
+                                if self.verbose:
+                                    print(f"Subdomain {subdomain} not found")
+                    except Exception as e:
+                        if self.verbose:
+                            print(f"Error: {e}")
 
-            for future in as_completed(future_to_lookup):
-                try:
-                    result = future.result()
-                    subdomain, service = future_to_lookup[future]
-                    if result:
-                        results.add((subdomain, service))
-                        if verbose:
-                            print(f"{color.green}Subdomain {subdomain} found{color.reset}")
-                    else:
-                        if verbose:
-                            print(f"Subdomain {subdomain} not found")
-                except Exception as e:
-                    if verbose:
-                        print(f"Error: {e}")
-            if pf:
-                try:
-                    with open(pf, 'r') as pfl:
-                        permutation_content = pfl.read().splitlines()
-                        for word in permutation_content:
-                            for suffix in sub_lookup.keys():
-                                results.update(sub_permutations(base, word, suffix, sub_lookup, verbose=verbose))
-                except FileNotFoundError:
-                    print(f"Permutation file '{pf}' not found.")
-                except Exception as e:
-                    print(f"Error reading permutation file: {e}")
-    finally:
-        executor.shutdown()
+                if self.pf:
+                    try:
+                        with open(self.pf, 'r') as pfl:
+                            permutation_content = pfl.read().splitlines()
+                            with ThreadPoolExecutor(max_workers=self.num_threads) as file_executor:
+                                future_to_word = {
+                                    file_executor.submit(self.sub_pfile, word): word
+                                    for word in permutation_content
+                                }
 
-    return results
+                                for future in as_completed(future_to_word):
+                                    word = future_to_word[future]
+                                    try:
+                                        future.result()
+                                    except Exception as e:
+                                        if self.verbose:
+                                            print(f"Error processing word '{word}': {e}")
+
+                    except FileNotFoundError:
+                        print(f"Permutation file '{self.pf}' not found.")
+                    except Exception as e:
+                        print(f"Error reading permutation file: {e}")
+
+        finally:
+            executor.shutdown()
+
+    def display_results(self):
+        if self.results:
+            longest_subdomain = max(len(result[0]) for result in self.results)
+            print(f"{'Subdomain':<{longest_subdomain + 6}}Service")
+            print("-" * (longest_subdomain + 25))
+            for result in self.results:
+                print(f"{result[0]:<{longest_subdomain + 6}}{result[1]}")
+        else:
+            print("No results found")
+
+    def run(self):
+        signal.signal(signal.SIGINT, self.signal_handler)
+        self.do_azsubs_enum()
+        self.display_results()
 
 def main():
     parser = argparse.ArgumentParser(description='Azure Subdomain Enumeration')
@@ -120,24 +158,8 @@ def main():
     parser.add_argument('-p', '--permutations', dest='permutations', help='File containing permutations')
     args = parser.parse_args()
 
-    base_name = args.base
-    verbose = args.verbose
-    num_threads = args.threads
-    pf = args.permutations
-
-    if pf:
-        result_set = do_azsubs_enum(base_name, verbose=verbose, num_threads=num_threads, pf=pf)
-    else:
-        result_set = do_azsubs_enum(base_name, verbose=verbose, num_threads=num_threads)
-    
-    if result_set:
-        longest_subdomain = max(len(result[0]) for result in result_set)
-        print(f"{'Subdomain':<{longest_subdomain + 6}}Service")
-        print("-" * (longest_subdomain + 25))
-        for result in result_set:
-            print(f"{result[0]:<{longest_subdomain + 6}}{result[1]}")
-    else:
-        print("No results found")
+    enumerator = AzureSubdomainEnumerator(args.base, verbose=args.verbose, num_threads=args.threads, pf=args.permutations)
+    enumerator.run()
 
 if __name__ == "__main__":
     main()

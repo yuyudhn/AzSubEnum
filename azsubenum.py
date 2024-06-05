@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 import dns.resolver
 import argparse
 import os
@@ -52,47 +52,38 @@ class AzureSubdomainEnumerator:
         except dns.resolver.NoAnswer:
             return True
         except:
-            pass
+            return False
 
     def generate_permutations(self, base, word, suffix):
         return [
-            (f"{base}-{word}.{suffix}", f"{word}-{base}.{suffix}"),
-            (f"{word}{base}.{suffix}", f"{base}{word}.{suffix}")
+            f"{base}-{word}.{suffix}", f"{word}-{base}.{suffix}",
+            f"{word}{base}.{suffix}", f"{base}{word}.{suffix}"
         ]
 
     def sub_permutations(self, base, word, suffix):
         running_list = []
-
         combinations = self.generate_permutations(base, word, suffix)
-
-        for combination in combinations:
-            for lookup in combination:
-                if self.azuresubs_enum(lookup):
-                    running_list.append((lookup, self.sub_lookup[suffix]))
-                    if self.verbose:
-                        print(f"{Color.green}Subdomain {lookup} found{Color.reset}")
-                else:
-                    if self.verbose:
-                        print(f"Subdomain {lookup} not found")
-
+        for lookup in combinations:
+            if self.azuresubs_enum(lookup):
+                running_list.append((lookup, self.sub_lookup[suffix]))
+                if self.verbose:
+                    print(f"{Color.green}Subdomain {lookup} found{Color.reset}")
+            elif self.verbose:
+                print(f"Subdomain {lookup} not found")
         return running_list
 
     def sub_pfile(self, word):
-        running_list = []
         for suffix in self.sub_lookup.keys():
-            with self.results_lock:
-                self.results.update(self.sub_permutations(self.base, word, suffix))
+            self.results.update(self.sub_permutations(self.base, word, suffix))
 
     def do_azsubs_enum(self):
         suffixes = self.sub_lookup.keys()
-
         try:
             with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
-                future_to_lookup = {}
-                for suffix in suffixes:
-                    lookup = f"{self.base}.{suffix}"
-                    future_to_lookup[executor.submit(self.azuresubs_enum, lookup)] = (lookup, self.sub_lookup[suffix])
-
+                future_to_lookup = {
+                    executor.submit(self.azuresubs_enum, f"{self.base}.{suffix}"): (f"{self.base}.{suffix}", service)
+                    for suffix, service in self.sub_lookup.items()
+                }
                 for future in as_completed(future_to_lookup):
                     try:
                         result = future.result()
@@ -102,46 +93,45 @@ class AzureSubdomainEnumerator:
                                 self.results.add((subdomain, service))
                                 if self.verbose:
                                     print(f"{Color.green}Subdomain {subdomain} found{Color.reset}")
-                            else:
-                                if self.verbose:
-                                    print(f"Subdomain {subdomain} not found")
+                            elif self.verbose:
+                                print(f"Subdomain {subdomain} not found")
                     except Exception as e:
                         if self.verbose:
                             print(f"Error: {e}")
 
                 if self.pf:
-                    try:
-                        with open(self.pf, 'r') as pfl:
-                            permutation_content = pfl.read().splitlines()
-                            with ThreadPoolExecutor(max_workers=self.num_threads) as file_executor:
-                                future_to_word = {
-                                    file_executor.submit(self.sub_pfile, word): word
-                                    for word in permutation_content
-                                }
-
-                                for future in as_completed(future_to_word):
-                                    word = future_to_word[future]
-                                    try:
-                                        future.result()
-                                    except Exception as e:
-                                        if self.verbose:
-                                            print(f"Error processing word '{word}': {e}")
-
-                    except FileNotFoundError:
-                        print(f"Permutation file '{self.pf}' not found.")
-                    except Exception as e:
-                        print(f"Error reading permutation file: {e}")
+                    self.process_permutation_file(executor)
 
         finally:
             executor.shutdown()
+
+    def process_permutation_file(self, executor):
+        try:
+            with open(self.pf, 'r') as pfl:
+                permutation_content = pfl.read().splitlines()
+                future_to_word = {
+                    executor.submit(self.sub_pfile, word): word
+                    for word in permutation_content
+                }
+                for future in as_completed(future_to_word):
+                    word = future_to_word[future]
+                    try:
+                        future.result()
+                    except Exception as e:
+                        if self.verbose:
+                            print(f"Error processing word '{word}': {e}")
+        except FileNotFoundError:
+            print(f"Permutation file '{self.pf}' not found.")
+        except Exception as e:
+            print(f"Error reading permutation file: {e}")
 
     def display_results(self):
         if self.results:
             longest_subdomain = max(len(result[0]) for result in self.results)
             print(f"{'Subdomain':<{longest_subdomain + 6}}Service")
             print("-" * (longest_subdomain + 25))
-            for result in self.results:
-                print(f"{result[0]:<{longest_subdomain + 6}}{result[1]}")
+            for subdomain, service in self.results:
+                print(f"{subdomain:<{longest_subdomain + 6}}{service}")
         else:
             print("No results found")
 
@@ -152,10 +142,10 @@ class AzureSubdomainEnumerator:
 
 def main():
     parser = argparse.ArgumentParser(description='Azure Subdomain Enumeration')
-    parser.add_argument('-b', '--base', dest='base', required=True, help='Base name to use')
+    parser.add_argument('-b', '--base', required=True, help='Base name to use')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show verbose output')
     parser.add_argument('-t', '--threads', type=int, default=1, help='Number of threads for concurrent execution')
-    parser.add_argument('-p', '--permutations', dest='permutations', help='File containing permutations')
+    parser.add_argument('-p', '--permutations', help='File containing permutations')
     args = parser.parse_args()
 
     enumerator = AzureSubdomainEnumerator(args.base, verbose=args.verbose, num_threads=args.threads, pf=args.permutations)

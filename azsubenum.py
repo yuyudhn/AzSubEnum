@@ -7,6 +7,9 @@ import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import queue
+from datetime import datetime
+import html
+import sys
 
 class Color:
     green = '\033[92m'
@@ -62,10 +65,12 @@ class AzureSubdomainEnumerator:
         }
         self.results = set()
         self.results_lock = threading.Lock()
+        self.accessible_blob_containers = []
+        self.blobs_lock = threading.Lock()
 
     def signal_handler(self, sig, frame):
         print("Ctrl+C detected. Terminating...")
-        os._exit(0)
+        sys.exit(0)
 
     def azuresubs_enum(self, subdomain):
         try:
@@ -73,7 +78,11 @@ class AzureSubdomainEnumerator:
             return True
         except dns.resolver.NoAnswer:
             return True
-        except:
+        except dns.resolver.NXDOMAIN:
+            return False
+        except Exception as e:
+            if self.verbose:
+                print(f"{Color.red}DNS resolution error for {subdomain}: {e}{Color.reset}")
             return False
 
     def generate_permutations(self, base, word, suffix):
@@ -99,7 +108,6 @@ class AzureSubdomainEnumerator:
             self.results.update(self.sub_permutations(self.base, word, suffix))
 
     def do_azsubs_enum(self):
-        suffixes = self.sub_lookup.keys()
         try:
             with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
                 future_to_lookup = {
@@ -119,7 +127,7 @@ class AzureSubdomainEnumerator:
                                 print(f"Subdomain {subdomain} not found")
                     except Exception as e:
                         if self.verbose:
-                            print(f"Error: {e}")
+                            print(f"{Color.red}Error: {e}{Color.reset}")
 
                 if self.pf:
                     self.process_permutation_file(executor)
@@ -131,8 +139,8 @@ class AzureSubdomainEnumerator:
                     print("\nChecking for publicly accessible blob containers...")
                     self.brute_force_containers(self.blob_wordlist, self.blob_threads)
 
-        finally:
-            executor.shutdown()
+        except KeyboardInterrupt:
+            print("\n[!] Script interrupted by user. Exiting...")
 
     def process_permutation_file(self, executor):
         try:
@@ -148,11 +156,11 @@ class AzureSubdomainEnumerator:
                         future.result()
                     except Exception as e:
                         if self.verbose:
-                            print(f"Error processing word '{word}': {e}")
+                            print(f"{Color.red}Error processing word '{word}': {e}{Color.reset}")
         except FileNotFoundError:
-            print(f"Permutation file '{self.pf}' not found.")
+            print(f"{Color.red}Permutation file '{self.pf}' not found.{Color.reset}")
         except Exception as e:
-            print(f"Error reading permutation file: {e}")
+            print(f"{Color.red}Error reading permutation file: {e}{Color.reset}")
 
     def save_blob_subdomains(self):
         try:
@@ -160,58 +168,174 @@ class AzureSubdomainEnumerator:
                 for subdomain, _ in self.results:
                     if 'blob.core.windows.net' in subdomain:
                         f.write(subdomain + '\n')
-            print(f"Blob subdomains saved to blobs.txt")
+            print(f"{Color.green}Blob subdomains saved to blobs.txt{Color.reset}")
         except Exception as e:
-            print(f"Error saving blob subdomains: {e}")
+            print(f"{Color.red}Error saving blob subdomains: {e}{Color.reset}")
 
     def check_blob_container(self, base_url, container_name):
         url = f"{base_url}{container_name}?restype=container&comp=list"
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             if response.status_code == 200:
-                print(f"[+] Publicly accessible container found: {url}")
-                print(f"(To access the Blob Container through the Azure Storage Explorer use the following URL: {base_url}{container_name})")
+                accessible_url = f"{base_url}{container_name}"
+                with self.blobs_lock:
+                    self.accessible_blob_containers.append(accessible_url)
+                print(f"{Color.green}[+] Publicly accessible container found: {url}{Color.reset}")
+                print(f"    (To access the Blob Container through the Azure Storage Explorer use the following URL: {accessible_url})")
         except requests.RequestException:
-            pass  # Ignore non-200 responses
+            pass  # Ignore non-200 responses and connection errors
 
     def brute_force_containers(self, wordlist, threads):
         try:
+            # Read container names from the wordlist
             with open(wordlist, 'r') as f:
                 container_names = [line.strip() for line in f]
 
+            # Prepare a list of tasks for the executor
+            tasks = []
+
             with ThreadPoolExecutor(max_workers=threads) as executor:
-                futures = {}
+                # For each discovered blob subdomain, create tasks for each container name
                 for subdomain, _ in self.results:
                     if 'blob.core.windows.net' in subdomain:
                         base_url = f"https://{subdomain}/"
                         for container_name in container_names:
-                            futures[executor.submit(self.check_blob_container, base_url, container_name)] = container_name
+                            tasks.append((base_url, container_name))
+
+                # Use ThreadPoolExecutor to check all blob containers in parallel
+                futures = {executor.submit(self.check_blob_container, base_url, container_name): (base_url, container_name)
+                           for base_url, container_name in tasks}
 
                 for future in as_completed(futures):
                     try:
                         future.result()
                     except Exception as e:
-                        print(f"Error in thread: {e}")
+                        print(f"{Color.red}Error in thread: {e}{Color.reset}")
 
             # Save discovered blob containers
             self.save_blob_subdomains()
 
+        except FileNotFoundError:
+            print(f"{Color.red}Blob wordlist file '{wordlist}' not found.{Color.reset}")
         except KeyboardInterrupt:
             print("\n[!] Script interrupted by user. Exiting...")
+        except Exception as e:
+            print(f"{Color.red}Error in brute_force_containers: {e}{Color.reset}")
 
     def display_discovered_subdomains(self):
         if self.results:
-            longest_subdomain = max(len(result[0]) for result in self.results)
-            print(f"{'Subdomain':<{longest_subdomain + 6}}Service")
-            print("-" * (longest_subdomain + 25))
+            # Create a dictionary to group subdomains by service
+            service_dict = {}
             for subdomain, service in self.results:
-                print(f"{subdomain:<{longest_subdomain + 6}}{service}")
+                if service not in service_dict:
+                    service_dict[service] = []
+                service_dict[service].append(subdomain)
+
+            # Display the results by service category
+            for service, subdomains in service_dict.items():
+                print(f"\n{service}:")
+                longest_subdomain = max(len(subdomain) for subdomain in subdomains)
+                # Removed the "Subdomain" header
+                print("-" * (longest_subdomain + 6))
+                for subdomain in subdomains:
+                    print(f"{subdomain:<{longest_subdomain + 6}}")
         else:
             print("No subdomains discovered")
 
+    def generate_html_report(self):
+        try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <title>Azure Subdomain Enumeration Report</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    h1 {{ color: #2E4053; }}
+                    h2 {{ color: #2874A6; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; }}
+                    th {{ background-color: #f2f2f2; text-align: left; }}
+                    tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                    .timestamp {{ font-size: 0.9em; color: #555; }}
+                </style>
+            </head>
+            <body>
+                <h1>Azure Subdomain Enumeration Report</h1>
+                <p class="timestamp">Generated on: {timestamp}</p>
+                <h2>Discovered Subdomains</h2>
+            """
+
+            if self.results:
+                # Group subdomains by service
+                service_dict = {}
+                for subdomain, service in self.results:
+                    if service not in service_dict:
+                        service_dict[service] = []
+                    service_dict[service].append(subdomain)
+
+                for service, subdomains in service_dict.items():
+                    html_content += f"<h3>{html.escape(service)}</h3>\n"
+                    html_content += """
+                    <table>
+                        <tr>
+                            <th>Subdomain</th>
+                        </tr>
+                    """
+                    for subdomain in subdomains:
+                        html_content += f"""
+                        <tr>
+                            <td>{html.escape(subdomain)}</td>
+                        </tr>
+                        """
+                    html_content += "</table>\n"
+
+            else:
+                html_content += "<p>No subdomains discovered.</p>"
+
+            # Include blob containers if blob enumeration was performed
+            if self.blob_wordlist and self.blob_threads:
+                html_content += "<h2>Accessible Blob Containers</h2>\n"
+                if self.accessible_blob_containers:
+                    html_content += """
+                    <table>
+                        <tr>
+                            <th>Blob Container URL</th>
+                        </tr>
+                    """
+                    for blob_url in self.accessible_blob_containers:
+                        html_content += f"""
+                        <tr>
+                            <td><a href="{html.escape(blob_url)}">{html.escape(blob_url)}</a></td>
+                        </tr>
+                        """
+                    html_content += "</table>\n"
+                else:
+                    html_content += "<p>No publicly accessible blob containers found.</p>"
+
+            html_content += """
+            </body>
+            </html>
+            """
+
+            # Write the HTML content to a file
+            with open('report.html', 'w') as report_file:
+                report_file.write(html_content)
+
+            print(f"{Color.green}\nHTML report generated: report.html{Color.reset}")
+
+        except Exception as e:
+            print(f"{Color.red}Error generating HTML report: {e}{Color.reset}")
+
     def run(self):
+        # Set up signal handler for graceful termination
         signal.signal(signal.SIGINT, self.signal_handler)
+        # Perform enumeration
         self.do_azsubs_enum()
+        # Generate HTML report
+        self.generate_html_report()
 
 def main():
     parser = argparse.ArgumentParser(description='Azure Subdomain Enumeration and Blob Container Access Checker')
@@ -228,7 +352,7 @@ def main():
     if args.blobsenum:
         if not args.blob_wordlist or not args.blob_threads:
             parser.error("--blobsenum requires --blob-wordlist and --blob-threads arguments")
-    
+
     enumerator = AzureSubdomainEnumerator(
         base=args.base,
         verbose=args.verbose,

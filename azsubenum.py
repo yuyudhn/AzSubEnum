@@ -182,8 +182,31 @@ class AzureSubdomainEnumerator:
                     self.accessible_blob_containers.append(accessible_url)
                 print(f"{Color.green}[+] Publicly accessible container found: {url}{Color.reset}")
                 print(f"    (To access the Blob Container through the Azure Storage Explorer use the following URL: {accessible_url})")
-        except requests.RequestException:
+                
+                # Now let's parse the XML content and extract <Name> tags
+                self.display_blob_contents(response.content)
+                
+            else:
+                if self.verbose:
+                    print(f"{Color.red}[-] Container {container_name} is not accessible or doesn't exist.{Color.reset}")
+
+        except requests.RequestException as e:
+            if self.verbose:
+                print(f"{Color.red}Request error: {e}{Color.reset}")
             pass  # Ignore non-200 responses and connection errors
+
+    def display_blob_contents(self, xml_content):
+        try:
+            from xml.etree import ElementTree as ET
+            root = ET.fromstring(xml_content)
+            print(f"{Color.green}[+] Blob contents:{Color.reset}")
+            for blob in root.findall(".//Blob"):
+                name = blob.find("Name")
+                if name is not None:
+                    print(f"    - {name.text}")
+        except ET.ParseError as e:
+            print(f"{Color.red}Error parsing XML: {e}{Color.reset}")
+
 
     def brute_force_containers(self, wordlist, threads):
         try:

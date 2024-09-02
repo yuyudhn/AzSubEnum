@@ -10,6 +10,7 @@ import queue
 from datetime import datetime
 import html
 import sys
+import logging
 
 class Color:
     green = '\033[92m'
@@ -67,6 +68,7 @@ class AzureSubdomainEnumerator:
         self.results_lock = threading.Lock()
         self.accessible_blob_containers = []
         self.blobs_lock = threading.Lock()
+        self.blob_contents = {}  # Dictionary to store blob contents by container URL
 
     def signal_handler(self, sig, frame):
         print("Ctrl+C detected. Terminating...")
@@ -162,16 +164,6 @@ class AzureSubdomainEnumerator:
         except Exception as e:
             print(f"{Color.red}Error reading permutation file: {e}{Color.reset}")
 
-    def save_blob_subdomains(self):
-        try:
-            with open('blobs.txt', 'w') as f:
-                for subdomain, _ in self.results:
-                    if 'blob.core.windows.net' in subdomain:
-                        f.write(subdomain + '\n')
-            print(f"{Color.green}Blob subdomains saved to blobs.txt{Color.reset}")
-        except Exception as e:
-            print(f"{Color.red}Error saving blob subdomains: {e}{Color.reset}")
-
     def check_blob_container(self, base_url, container_name):
         url = f"{base_url}{container_name}?restype=container&comp=list"
         try:
@@ -180,11 +172,12 @@ class AzureSubdomainEnumerator:
                 accessible_url = f"{base_url}{container_name}"
                 with self.blobs_lock:
                     self.accessible_blob_containers.append(accessible_url)
+                    
                 print(f"{Color.green}[+] Publicly accessible container found: {url}{Color.reset}")
                 print(f"    (To access the Blob Container through the Azure Storage Explorer use the following URL: {accessible_url})")
                 
-                # Now let's parse the XML content and extract <Name> tags
-                self.display_blob_contents(response.content)
+                # Parse the XML content and extract <Name> tags
+                self.display_blob_contents(response.content, accessible_url)
                 
             else:
                 if self.verbose:
@@ -195,18 +188,25 @@ class AzureSubdomainEnumerator:
                 print(f"{Color.red}Request error: {e}{Color.reset}")
             pass  # Ignore non-200 responses and connection errors
 
-    def display_blob_contents(self, xml_content):
+    def display_blob_contents(self, xml_content, container_url):
         try:
             from xml.etree import ElementTree as ET
             root = ET.fromstring(xml_content)
+            blob_names = []
             print(f"{Color.green}[+] Blob contents:{Color.reset}")
             for blob in root.findall(".//Blob"):
                 name = blob.find("Name")
                 if name is not None:
+                    blob_names.append(name.text)
                     print(f"    - {name.text}")
+            
+            # Store blob names in the dictionary
+            if blob_names:
+                with self.blobs_lock:
+                    self.blob_contents[container_url] = blob_names
+
         except ET.ParseError as e:
             print(f"{Color.red}Error parsing XML: {e}{Color.reset}")
-
 
     def brute_force_containers(self, wordlist, threads):
         try:
@@ -234,9 +234,6 @@ class AzureSubdomainEnumerator:
                         future.result()
                     except Exception as e:
                         print(f"{Color.red}Error in thread: {e}{Color.reset}")
-
-            # Save discovered blob containers
-            self.save_blob_subdomains()
 
         except FileNotFoundError:
             print(f"{Color.red}Blob wordlist file '{wordlist}' not found.{Color.reset}")
@@ -292,7 +289,6 @@ class AzureSubdomainEnumerator:
             """
 
             if self.results:
-                # Group subdomains by service
                 service_dict = {}
                 for subdomain, service in self.results:
                     if service not in service_dict:
@@ -318,7 +314,6 @@ class AzureSubdomainEnumerator:
             else:
                 html_content += "<p>No subdomains discovered.</p>"
 
-            # Include blob containers if blob enumeration was performed
             if self.bw and self.bt:
                 html_content += "<h2>Accessible Blob Containers</h2>\n"
                 if self.accessible_blob_containers:
@@ -326,12 +321,23 @@ class AzureSubdomainEnumerator:
                     <table>
                         <tr>
                             <th>Blob Container URL</th>
+                            <th>Contained Blobs</th>
                         </tr>
                     """
-                    for blob_url in self.accessible_blob_containers:
+                    for container_url in self.accessible_blob_containers:
                         html_content += f"""
                         <tr>
-                            <td><a href="{html.escape(blob_url)}">{html.escape(blob_url)}</a></td>
+                            <td>{html.escape(container_url)}</td>
+                            <td>
+                                <ul>
+                        """
+                        # List the blobs for this container
+                        blob_names = self.blob_contents.get(container_url, [])
+                        for blob_name in blob_names:
+                            html_content += f"<li>{html.escape(blob_name)}</li>"
+                        html_content += """
+                                </ul>
+                            </td>
                         </tr>
                         """
                     html_content += "</table>\n"
@@ -343,14 +349,13 @@ class AzureSubdomainEnumerator:
             </html>
             """
 
-            # Write the HTML content to a file
             with open('report.html', 'w') as report_file:
                 report_file.write(html_content)
 
-            print(f"{Color.green}\nHTML report generated: report.html{Color.reset}")
+            logging.info("HTML report generated: report.html")
 
         except Exception as e:
-            print(f"{Color.red}Error generating HTML report: {e}{Color.reset}")
+            logging.error(f"Error generating HTML report: {e}")
 
     def run(self):
         # Set up signal handler for graceful termination

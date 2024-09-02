@@ -35,13 +35,13 @@ class UserInputTimeout:
         return self.result
 
 class AzureSubdomainEnumerator:
-    def __init__(self, base, verbose=False, num_threads=1, pf=None, blob_wordlist=None, blob_threads=None):
+    def __init__(self, base, verbose=False, num_threads=1, pf=None, bw=None, bt=None):
         self.base = base
         self.verbose = verbose
         self.num_threads = num_threads
         self.pf = pf
-        self.blob_wordlist = blob_wordlist
-        self.blob_threads = blob_threads
+        self.bw = bw
+        self.bt = bt
         self.sub_lookup = {
             'onmicrosoft.com': 'Microsoft Hosted Domain',
             'scm.azurewebsites.net': 'App Services - Management',
@@ -135,9 +135,9 @@ class AzureSubdomainEnumerator:
                 print("\nDiscovered Subdomains:")
                 self.display_discovered_subdomains()
 
-                if self.blob_wordlist and self.blob_threads:
+                if self.bw and self.bt:
                     print("\nChecking for publicly accessible blob containers...")
-                    self.brute_force_containers(self.blob_wordlist, self.blob_threads)
+                    self.brute_force_containers(self.bw, self.bt)
 
         except KeyboardInterrupt:
             print("\n[!] Script interrupted by user. Exiting...")
@@ -296,7 +296,7 @@ class AzureSubdomainEnumerator:
                 html_content += "<p>No subdomains discovered.</p>"
 
             # Include blob containers if blob enumeration was performed
-            if self.blob_wordlist and self.blob_threads:
+            if self.bw and self.bt:
                 html_content += "<h2>Accessible Blob Containers</h2>\n"
                 if self.accessible_blob_containers:
                     html_content += """
@@ -344,22 +344,25 @@ def main():
     parser.add_argument('-t', '--threads', type=int, default=10, help='Number of threads for concurrent execution')
     parser.add_argument('-p', '--permutations', help='File containing permutations')
     parser.add_argument('--blobsenum', action='store_true', help='Perform blob container enumeration')
-    parser.add_argument('--blob-wordlist', help='Path to a custom wordlist file for blob container enumeration')
-    parser.add_argument('--blob-threads', type=int, help='Number of threads to use for blob container enumeration')
+    parser.add_argument('-bw', help='Path to a custom wordlist file for blob container enumeration')
+    parser.add_argument('-bt', type=int, help='Number of threads to use for blob container enumeration')
 
     args = parser.parse_args()
 
+    # Default blob wordlist to permutations.txt if not provided
+    bw = args.bw if args.bw else 'permutations.txt'
+
     if args.blobsenum:
-        if not args.blob_wordlist or not args.blob_threads:
-            parser.error("--blobsenum requires --blob-wordlist and --blob-threads arguments")
+        if not bw or not args.bt:
+            parser.error("--blobsenum requires a blob wordlist and --blob-threads argument")
 
     enumerator = AzureSubdomainEnumerator(
         base=args.base,
         verbose=args.verbose,
         num_threads=args.threads,
         pf=args.permutations,
-        blob_wordlist=args.blob_wordlist,
-        blob_threads=args.blob_threads
+        bw=bw,  # Pass the determined wordlist
+        bt=args.bt
     )
     enumerator.run()
 

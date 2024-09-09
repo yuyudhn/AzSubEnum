@@ -9,12 +9,17 @@ With this tool, users can conduct thorough subdomain enumeration within Azure en
 ## Why i create this?
 During my learning journey on Azure AD exploitation, I discovered that the Azure subdomain tool, [Invoke-EnumerateAzureSubDomains](https://github.com/NetSPI/MicroBurst/blob/master/Misc/Invoke-EnumerateAzureSubDomains.ps1) from NetSPI, was unable to run on my Debian PowerShell. Consequently, I created a crude implementation of that tool in Python.
 
+## Added functionality
+1. Discovered subdomains are now displayed by **Service** category.
+2. AzSubEnum has now the option to perform enumeration for Blob Containers that allow Anonymous access and discover Blobs inside them. This can be done using the `--blobsenum` optional argument. The default wordlist used is `permutations.txt` that is already caonteined in the repository. Users can define their own custom wordlist using the `-bw` option, as well as use threaded fuzzing with the `-bt` option to speed up the enumeration.
+3. AzSubEnum will also generate a simple HTML report with the findings.
+
 ## Usage
 ```
-➜  AzSubEnum git:(main) ✗ python3 azsubenum.py --help
-usage: azsubenum.py [-h] -b BASE [-v] [-t THREADS] [-p PERMUTATIONS]
+PS C:\AzureTools\AzSubEnum> python.exe .\azsubenum.py --help
+usage: azsubenum.py [-h] -b BASE [-v] [-t THREADS] [-p PERMUTATIONS] [--blobsenum] [-bw BW] [-bt BT]
 
-Azure Subdomain Enumeration
+Azure Subdomain Enumeration and Blob Container Access Checker
 
 options:
   -h, --help            show this help message and exit
@@ -24,6 +29,9 @@ options:
                         Number of threads for concurrent execution
   -p PERMUTATIONS, --permutations PERMUTATIONS
                         File containing permutations
+  --blobsenum           Perform blob container enumeration
+  -bw BW                Path to a custom wordlist file for blob container enumeration
+  -bt BT                Number of threads to use for blob container enumeration
 ```
 
 Basic enumeration:
@@ -39,6 +47,17 @@ python3 azsubenum.py -b retailcorp --thread 10 --permutation permutations.txt
 With verbose output:
 ```
 python3 azsubenum.py -b retailcorp --thread 10 --permutation permutations.txt --verbose
+```
+
+Basic enumeration with Blob Containers enumeration using the default Blob Container wordlist:
+```
+python3 azsubenum.py -b retailcorp --thread 10 --permutation permutations.txt --blobsenum -bt 10
+```
+
+Basic enumeration with Blob Containers enumeration using a custom Blob Container wordlist
+```
+python3 azsubenum.py -b retailcorp --thread 10 --permutation permutations.txt --blobsenum -bw yourcustomwordlist.txt -bt 10
+
 ```
 
 ## Screenshot

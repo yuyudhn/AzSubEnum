@@ -355,9 +355,8 @@ def main():
     # Default blob wordlist to permutations.txt if not provided
     bw = args.bw if args.bw else 'permutations.txt'
 
-    if args.blobsenum:
-        if not bw or not args.bt:
-            parser.error("--blobsenum requires a blob wordlist and --blob-threads argument")
+    if args.blobsenum and not args.bt:
+        parser.error("--blobsenum requires -bt (number of blob enumeration threads)")
 
     enumerator = AzureSubdomainEnumerator(
         base=args.base,

@@ -3,12 +3,10 @@ import dns.resolver
 import requests
 import argparse
 import os
-import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from datetime import datetime
 import html
-import sys
 import logging
 
 class Color:
@@ -50,10 +48,6 @@ class AzureSubdomainEnumerator:
         self.accessible_blob_containers = []
         self.blobs_lock = threading.Lock()
         self.blob_contents = {}  # Dictionary to store blob contents by container URL
-
-    def signal_handler(self, sig, frame):
-        print("Ctrl+C detected. Terminating...")
-        sys.exit(0)
 
     def azuresubs_enum(self, subdomain):
         try:
@@ -339,8 +333,6 @@ class AzureSubdomainEnumerator:
             logging.error(f"Error generating HTML report: {e}")
 
     def run(self):
-        # Set up signal handler for graceful termination
-        signal.signal(signal.SIGINT, self.signal_handler)
         # Perform enumeration
         self.do_azsubs_enum()
         # Generate HTML report

@@ -82,7 +82,9 @@ class AzureSubdomainEnumerator:
 
     def sub_pfile(self, word):
         for suffix in self.sub_lookup.keys():
-            self.results.update(self.sub_permutations(self.base, word, suffix))
+            found = self.sub_permutations(self.base, word, suffix)
+            with self.results_lock:
+                self.results.update(found)
 
     def do_azsubs_enum(self):
         try:

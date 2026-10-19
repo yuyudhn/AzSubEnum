@@ -63,5 +63,8 @@ python3 azsubenum.py -b retailcorp --threads 10 --blobsenum --blob-wordlist cust
 ## Let's contribute!
 Do you have any ideas on how to enhance this tool? Let's contribute!
 
+## License
+BSD-3-Clause. Free to use, modify, and redistribute (including commercially), provided the copyright notices are retained. See [LICENSE](LICENSE). Based on [NetSPI/MicroBurst](https://github.com/NetSPI/MicroBurst) (BSD-3-Clause).
+
 ## Disclaimer
 Any actions and or activities related to the material contained within this tool is solely your responsibility. The misuse of the information in this tool can result in criminal charges brought against the persons in question.

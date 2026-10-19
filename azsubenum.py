@@ -340,15 +340,21 @@ class AzureSubdomainEnumerator:
         # Generate HTML report
         self.generate_html_report()
 
+def positive_int(value):
+    ivalue = int(value)
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError(f"{value} is not a positive integer")
+    return ivalue
+
 def main():
     parser = argparse.ArgumentParser(description='Azure Subdomain Enumeration and Blob Container Access Checker')
     parser.add_argument('-b', '--base', required=True, help='Base name to use')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show verbose output')
-    parser.add_argument('-t', '--threads', type=int, default=10, help='Number of threads for concurrent execution')
+    parser.add_argument('-t', '--threads', type=positive_int, default=10, help='Number of threads for concurrent execution')
     parser.add_argument('-p', '--permutations', help='File containing permutations')
     parser.add_argument('--blobsenum', action='store_true', help='Perform blob container enumeration')
     parser.add_argument('-bw', '--blob-wordlist', dest='bw', help='Path to a custom wordlist file for blob container enumeration')
-    parser.add_argument('-bt', '--blob-threads', dest='bt', type=int, default=10, help='Number of threads to use for blob container enumeration')
+    parser.add_argument('-bt', '--blob-threads', dest='bt', type=positive_int, default=10, help='Number of threads to use for blob container enumeration')
 
     args = parser.parse_args()
 

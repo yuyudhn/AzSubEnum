@@ -347,16 +347,13 @@ def main():
     parser.add_argument('-t', '--threads', type=int, default=10, help='Number of threads for concurrent execution')
     parser.add_argument('-p', '--permutations', help='File containing permutations')
     parser.add_argument('--blobsenum', action='store_true', help='Perform blob container enumeration')
-    parser.add_argument('-bw', help='Path to a custom wordlist file for blob container enumeration')
-    parser.add_argument('-bt', type=int, help='Number of threads to use for blob container enumeration')
+    parser.add_argument('-bw', '--blob-wordlist', dest='bw', help='Path to a custom wordlist file for blob container enumeration')
+    parser.add_argument('-bt', '--blob-threads', dest='bt', type=int, default=10, help='Number of threads to use for blob container enumeration')
 
     args = parser.parse_args()
 
     # Default blob wordlist to permutations.txt if not provided
     bw = args.bw if args.bw else 'permutations.txt'
-
-    if args.blobsenum and not args.bt:
-        parser.error("--blobsenum requires -bt (number of blob enumeration threads)")
 
     enumerator = AzureSubdomainEnumerator(
         base=args.base,
@@ -364,7 +361,7 @@ def main():
         num_threads=args.threads,
         pf=args.permutations,
         bw=bw,  # Pass the determined wordlist
-        bt=args.bt
+        bt=args.bt if args.blobsenum else None
     )
     enumerator.run()
 

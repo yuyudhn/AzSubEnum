@@ -13,7 +13,7 @@ During my learning journey on Azure AD exploitation, I discovered that the Azure
 ```
 ➜  AzSubEnum git:(main) ✗ python3 azsubenum.py --help
 usage: azsubenum.py [-h] -b BASE [-v] [-t THREADS] [-p PERMUTATIONS]
-                    [--blobsenum] [-bw BW] [-bt BT]
+                    [--blobsenum] [-bw BLOB_WORDLIST] [-bt BLOB_THREADS]
 
 Azure Subdomain Enumeration and Blob Container Access Checker
 
@@ -26,9 +26,11 @@ options:
   -p PERMUTATIONS, --permutations PERMUTATIONS
                         File containing permutations
   --blobsenum           Perform blob container enumeration
-  -bw BW                Path to a custom wordlist file for blob container
+  -bw BLOB_WORDLIST, --blob-wordlist BLOB_WORDLIST
+                        Path to a custom wordlist file for blob container
                         enumeration
-  -bt BT                Number of threads to use for blob container
+  -bt BLOB_THREADS, --blob-threads BLOB_THREADS
+                        Number of threads to use for blob container
                         enumeration
 ```
 
@@ -49,8 +51,9 @@ python3 azsubenum.py -b retailcorp --threads 10 --permutations permutations.txt 
 
 Blob container enumeration:
 ```
+python3 azsubenum.py -b retailcorp --threads 10 --blobsenum
 python3 azsubenum.py -b retailcorp --threads 10 --blobsenum -bt 10
-python3 azsubenum.py -b retailcorp --threads 10 --blobsenum -bw custom_wordlist.txt -bt 10
+python3 azsubenum.py -b retailcorp --threads 10 --blobsenum --blob-wordlist custom_wordlist.txt --blob-threads 10
 ```
 
 ## Screenshot

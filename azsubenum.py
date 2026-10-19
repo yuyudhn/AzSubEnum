@@ -6,7 +6,6 @@ import os
 import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
-import queue
 from datetime import datetime
 import html
 import sys
@@ -16,24 +15,6 @@ class Color:
     green = '\033[92m'
     red = '\033[91m'
     reset = '\033[0m'
-
-class UserInputTimeout:
-    def __init__(self, timeout):
-        self.timeout = timeout
-        self.result = None
-        self.input_queue = queue.Queue()
-
-    def _input(self):
-        self.result = input()
-
-    def get_input(self):
-        input_thread = threading.Thread(target=self._input)
-        input_thread.daemon = True
-        input_thread.start()
-        input_thread.join(timeout=self.timeout)
-        if input_thread.is_alive():
-            return None  # Timeout occurred
-        return self.result
 
 class AzureSubdomainEnumerator:
     def __init__(self, base, verbose=False, num_threads=1, pf=None, bw=None, bt=None):

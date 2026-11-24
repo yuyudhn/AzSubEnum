@@ -372,7 +372,7 @@ def main():
         num_threads=args.threads,
         pf=args.permutations,
         bw=bw,  # Pass the determined wordlist
-        bt=args.bt if args.blobsenum else None
+        bt=args.bt if args.blobsenum else None,
         ua=args.ua
     )
     enumerator.run()

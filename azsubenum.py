@@ -15,7 +15,7 @@ class Color:
     reset = '\033[0m'
 
 class AzureSubdomainEnumerator:
-    def __init__(self, base, verbose=False, num_threads=1, pf=None, bw=None, bt=None):
+    def __init__(self, base, verbose=False, num_threads=1, pf=None, bw=None, bt=None, ua=None):
         self.base = base
         self.verbose = verbose
         self.num_threads = num_threads
@@ -48,6 +48,7 @@ class AzureSubdomainEnumerator:
         self.accessible_blob_containers = []
         self.blobs_lock = threading.Lock()
         self.blob_contents = {}  # Dictionary to store blob contents by container URL
+        self.ua = ua
 
     def azuresubs_enum(self, subdomain):
         try:
@@ -144,7 +145,8 @@ class AzureSubdomainEnumerator:
     def check_blob_container(self, base_url, container_name):
         url = f"{base_url}{container_name}?restype=container&comp=list"
         try:
-            response = requests.get(url, timeout=10)
+            headers = {'User-Agent': self.ua} if self.ua else None
+            response = requests.get(url, timeout=10, headers=headers)
             if response.status_code == 200:
                 accessible_url = f"{base_url}{container_name}"
                 with self.blobs_lock:
@@ -355,6 +357,9 @@ def main():
     parser.add_argument('--blobsenum', action='store_true', help='Perform blob container enumeration')
     parser.add_argument('-bw', '--blob-wordlist', dest='bw', help='Path to a custom wordlist file for blob container enumeration')
     parser.add_argument('-bt', '--blob-threads', dest='bt', type=positive_int, default=10, help='Number of threads to use for blob container enumeration')
+    parser.add_argument('-ua', '--user-agent', dest='ua',
+                    default='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36',
+                    help='Custom User-Agent header for HTTP requests')
 
     args = parser.parse_args()
 
@@ -368,6 +373,7 @@ def main():
         pf=args.permutations,
         bw=bw,  # Pass the determined wordlist
         bt=args.bt if args.blobsenum else None
+        ua=args.ua
     )
     enumerator.run()
 

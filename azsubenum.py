@@ -358,7 +358,7 @@ def main():
     parser.add_argument('-bw', '--blob-wordlist', dest='bw', help='Path to a custom wordlist file for blob container enumeration')
     parser.add_argument('-bt', '--blob-threads', dest='bt', type=positive_int, default=10, help='Number of threads to use for blob container enumeration')
     parser.add_argument('-ua', '--user-agent', dest='ua',
-                    default='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36',
+                    default='AzsubEnum-User-Agent',
                     help='Custom User-Agent header for HTTP requests')
 
     args = parser.parse_args()
